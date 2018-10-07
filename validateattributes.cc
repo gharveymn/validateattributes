@@ -109,7 +109,7 @@ static void ClassNotFoundError (std::string err_ini, Array<std::string> cls, std
   
 }
 
-static void AttributeNameError (std::string err_id, std::string err_ini, std::string attr_name)
+static void AttributeError (std::string err_id, std::string err_ini, std::string attr_name)
 {
   error (err_id, (err_ini + " must be " + attr_name).c_str());
 }
@@ -122,86 +122,174 @@ static void UnknownAttributeError (std::string attr_name)
 static void CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
 {
   octave_idx_type i;
-  std::string attr_name;
+  std::string name;
+  size_t len;
   for (i = 0; i < attr.numel (); i++)
   {
-    attr_name = attr(i).string_value ();
+    name = attr(i).string_value ();
+    len = name.length ();
     
-    if (attr_name.length () < 1)
-      UnknownAttributeError(attr_name);
+    if (len < 1)
+      UnknownAttributeError(name);
     
-    switch (attr_name[0])
+    switch (std::tolower(name[0]))
     {
-      case '2':
+      case '2': // 2d
       {
-        
+        if (len == 2 && std::tolower(name[1]) == 'd')
+        {
+          if (ov_A.ndims () != 2)
+          {
+            AttributeError ("Octave:expected-2d", err_ini, name);
+          }
+        }
+        else
+          UnknownAttributeError(name);
+        break;
       }
-      case '3':
+      case '3': // 3d
       {
-        
+        if (len == 2 && std::tolower(name[1]) == 'd')
+        {
+          if (ov_A.ndims () > 3)
+          {
+            AttributeError ("Octave:expected-3d", err_ini, name);
+          }
+        }
+        else
+          UnknownAttributeError(name);
+        break;
       }
-      case 'c':
+      case 'c': // column
       {
-        
+        if (octave::string::strcmpi (name, "column") == 0)
+        {
+          // STUB: ! iscolumn (ov_A);
+        }
+        else
+          UnknownAttributeError(name);
+        break;
       }
-      case 'r':
+      case 'r': // row, real
       {
-        
+        if (octave::string::strcmpi (name, "row") == 0)
+        {
+          // STUB: ! isrow (ov_A);
+        }
+        else if (octave::string::strcmpi (name, "real") == 0)
+        {
+          // STUB: ! isreal (ov_A);
+        }
+        else
+          UnknownAttributeError(name);
+        break;
       }
-      case 's':
+      case 's': // scalar, square, size, 
       {
-        
+        if (octave::string::strcmpi (name, "scalar") == 0)
+        {
+          // STUB: ! isscalar (ov_A);
+        }
+        else if (octave::string::strcmpi (name, "square") == 0)
+        {
+          // STUB: ! issquare (ov_A);
+        }
+        else if (octave::string::strcmpi (name, "size") == 0)
+        {
+          // STUB: stuff;
+        }
+        else
+          UnknownAttributeError(name);
+        break;
       }
-      case 'v':
+      case 'v': // vector
       {
-        
+        if (octave::string::strcmpi (name, "vector") == 0)
+        {
+          if(! ov_A.is_vector ())
+          {
+            AttributeError ("Octave:expected-vector", err_ini, name);
+          }
+        }
+        else
+          UnknownAttributeError(name);
+        break;
       }
-      case 'd':
+      case 'd': //diag, decreasing
       {
-        
+        if (octave::string::strcmpi (name, "diag") == 0)
+        {
+          // STUB: ! isdiag (ov_A);
+        }
+        else if (octave::string::strcmpi (name, "decreasing") == 0)
+        {
+          // STUB: stuff;
+        }
+        else
+          UnknownAttributeError(name);
+        break;
       }
-      case 'n':
+      case 'n': // nonempty, nonsparse, nonnan, nonnegative, nonzero, nondecreasing, nonincreasing, numel, ncols, nrows, ndims, 
       {
-        
+        if (len > 1)
+        {
+          switch (std::tolower (name[1]))
+          {
+            case 'o': // nonempty, nonsparse, nonnan, nonnegative, nonzero, nondecreasing, nonincreasing
+            case 'u': // numel
+            case 'c': // ncols
+            case 'r': // nrows
+            case 'd': // ndims
+            default:
+              UnknownAttributeError(name);
+          }
+        }
+        else
+          UnknownAttributeError(name);
+        break;
       }
-      case 'b':
+      case 'b': // binary
       {
         
+        break;
       }
-      case 'e':
+      case 'e': // even
       {
         
+        break;
       }
-      case 'o':
+      case 'o': // odd
       {
         
+        break;
       }
-      case 'i':
+      case 'i': // integer, increasing
       {
         
+        break;
       }
-      case 'r':
+      case 'f': // finite
       {
         
+        break;
       }
-      case 'f':
+      case 'p': // positive
       {
         
+        break;
       }
-      case 'p':
+      case '>': // >, >=
       {
         
+        break;
       }
-      case '>':
+      case '<': // <, <=
       {
         
-      }
-      case '<':
-      {
-        
+        break;
       }
       default:
-        UnknownAttributeError(attr_name);
+        UnknownAttributeError(name);
     }
   }
 }

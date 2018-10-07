@@ -119,15 +119,60 @@ static void UnknownAttributeError (std::string attr_name)
   error ("Octave:invalid-input-arg", ("validateattributes: unknown ATTRIBUTE " + attr_name).c_str());
 }
 
-static void CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
+static bool CheckSize (dim_vector A_dims, octave_idx_type A_ndims, dim_vector attr_dims, octave_idx_type attr_ndims)
 {
   
   octave_idx_type i;
+  
+  if (attr_ndims < A_ndims)
+    return false;
+  
+  for (i = 0; i < attr_ndims; i++)
+  {
+    if (! std::isnan (attr_dims[i]))
+    {
+      if (i >= A_ndims)
+      {
+        return false;
+      }
+      else if (! std::isnan (A_dims[i]) && A_dims[i] != attr_dims[i])
+      {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+
+static void WriteDimsString (dim_vector dims, octave_idx_type ndims, std::string& str)
+{
+  octave_idx_type i;
+  for (i = 0; i < ndims; i++)
+  {
+    if (std::isnan (dims[i]))
+      str += "N";
+    else
+      str += std::to_string (dims[i]);
+    
+    if (i < A_ndims - 1)
+      str += "x";
+  }
+}
+
+static bool CheckDecreasing (
+
+
+static void CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
+{
+  
+  octave_idx_type i, j;
   octave_value attr_val;
   std::string name;
   size_t len;
   
-  dim_vector A_dims = ov_A.dims ();
+  dim_vector      A_dims  = ov_A.dims ();
+  octave_idx_type A_ndims = ov_A.ndims ();
   
   i = 0;
   while(i < attr.numel ())
@@ -144,7 +189,7 @@ static void CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
       {
         if (len == 2 && std::tolower(name[1]) == 'd')
         {
-          if (ov_A.ndims () != 2)
+          if (A_ndims != 2)
           {
             AttributeError ("Octave:expected-2d", err_ini, name);
           }
@@ -157,7 +202,7 @@ static void CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
       {
         if (len == 2 && std::tolower(name[1]) == 'd')
         {
-          if (ov_A.ndims () > 3)
+          if (A_ndims > 3)
           {
             AttributeError ("Octave:expected-3d", err_ini, name);
           }
@@ -170,7 +215,7 @@ static void CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
       {
         if (octave::string::strcmpi (name, "column") == 0)
         {
-          if (A_dims.ndims () != 2 || A_dims(1) != 1)
+          if (A_ndims != 2 || A_dims(1) != 1)
           {
             AttributeError ("Octave:expected-column", err_ini, name);
           }
@@ -183,7 +228,7 @@ static void CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
       {
         if (octave::string::strcmpi (name, "row") == 0)
         {
-          if (A_dims.ndims () != 2 || A_dims(0) != 1)
+          if (A_ndims != 2 || A_dims(0) != 1)
           {
             AttributeError ("Octave:expected-row", err_ini, name);
           }
@@ -210,15 +255,26 @@ static void CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
         }
         else if (octave::string::strcmpi (name, "square") == 0)
         {
-          if (A_dims.ndims () != 2 || A_dims(0) != A_dims(1))
+          if (A_ndims != 2 || A_dims(0) != A_dims(1))
           {
             AttributeError ("Octave:expected-square", err_ini, name);
           }
         }
         else if (octave::string::strcmpi (name, "size") == 0)
         {
-          dim_vector attr_dims = attr(i++).dims ();
-          // do comparison while skipping over NaNs in attr_val
+          attr_val = attr(i++);
+          dim_vector attr_dims = attr_val.dims ();
+          octave_idx_type attr_ndims = attr_val.ndims ();
+          if (! CheckSize (A_dims, A_ndims, attr_dims, attr_ndims)
+          {
+            std::string A_dims_str;
+            WriteDimsString (A_dims, A_ndims, A_dims_str);
+            
+            std::string attr_dims_str;
+            WriteDimsString (attr_dims, attr_ndims, attr_dims_str);
+            
+            error ("Octave:incorrect-size", (err_ini + " must be of size " attr_dims_str + " but was " + A_dims_str).c_str());
+          }
         }
         else
           UnknownAttributeError(name);
@@ -241,7 +297,10 @@ static void CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
       {
         if (octave::string::strcmpi (name, "diag") == 0)
         {
-          // STUB: ! isdiag (ov_A);
+          if (! ov_A.is_diag_matrix())
+          {
+            AttributeError ("Octave:expected-diag", err_ini, name);
+          }
         }
         else if (octave::string::strcmpi (name, "decreasing") == 0)
         {
@@ -266,6 +325,10 @@ static void CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
               else if (octave::string::strcmpi (name, "nonsparse") == 0)
               {
                 // STUB: stuff;
+                if (ov_A.issparse ())
+                {
+                  AttributeError ("Octave:expected-nonsparse", err_ini, name);
+                }
               }
               else if (octave::string::strcmpi (name, "nonnan") == 0)
               {

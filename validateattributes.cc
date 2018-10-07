@@ -121,12 +121,18 @@ static void UnknownAttributeError (std::string attr_name)
 
 static void CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
 {
+  
   octave_idx_type i;
+  octave_value attr_val;
   std::string name;
   size_t len;
-  for (i = 0; i < attr.numel (); i++)
+  
+  dim_vector A_dims = ov_A.dims ();
+  
+  i = 0;
+  while(i < attr.numel ())
   {
-    name = attr(i).string_value ();
+    name = attr(i++).string_value ();
     len = name.length ();
     
     if (len < 1)
@@ -164,7 +170,10 @@ static void CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
       {
         if (octave::string::strcmpi (name, "column") == 0)
         {
-          // STUB: ! iscolumn (ov_A);
+          if (A_dims.ndims () != 2 || A_dims(1) != 1)
+          {
+            AttributeError ("Octave:expected-column", err_ini, name);
+          }
         }
         else
           UnknownAttributeError(name);
@@ -174,11 +183,17 @@ static void CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
       {
         if (octave::string::strcmpi (name, "row") == 0)
         {
-          // STUB: ! isrow (ov_A);
+          if (A_dims.ndims () != 2 || A_dims(0) != 1)
+          {
+            AttributeError ("Octave:expected-row", err_ini, name);
+          }
         }
         else if (octave::string::strcmpi (name, "real") == 0)
         {
-          // STUB: ! isreal (ov_A);
+          if (! ov_A.isreal ())
+          {
+            AttributeError ("Octave:expected-real", err_ini, name);
+          }
         }
         else
           UnknownAttributeError(name);
@@ -188,15 +203,22 @@ static void CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
       {
         if (octave::string::strcmpi (name, "scalar") == 0)
         {
-          // STUB: ! isscalar (ov_A);
+          if(ov_A.numel () != 1)
+          {
+            AttributeError ("Octave:expected-scalar", err_ini, name);
+          }
         }
         else if (octave::string::strcmpi (name, "square") == 0)
         {
-          // STUB: ! issquare (ov_A);
+          if (A_dims.ndims () != 2 || A_dims(0) != A_dims(1))
+          {
+            AttributeError ("Octave:expected-square", err_ini, name);
+          }
         }
         else if (octave::string::strcmpi (name, "size") == 0)
         {
-          // STUB: stuff;
+          dim_vector attr_dims = attr(i++).dims ();
+          // do comparison while skipping over NaNs in attr_val
         }
         else
           UnknownAttributeError(name);
@@ -236,6 +258,39 @@ static void CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
           switch (std::tolower (name[1]))
           {
             case 'o': // nonempty, nonsparse, nonnan, nonnegative, nonzero, nondecreasing, nonincreasing
+            {
+              if (octave::string::strcmpi (name, "nonempty") == 0)
+              {
+                // STUB: ! isdiag (ov_A);
+              }
+              else if (octave::string::strcmpi (name, "nonsparse") == 0)
+              {
+                // STUB: stuff;
+              }
+              else if (octave::string::strcmpi (name, "nonnan") == 0)
+              {
+                // STUB: stuff;
+              }
+              else if (octave::string::strcmpi (name, "nonnegative") == 0)
+              {
+                // STUB: stuff;
+              }
+              else if (octave::string::strcmpi (name, "nonzero") == 0)
+              {
+                // STUB: stuff;
+              }
+              else if (octave::string::strcmpi (name, "nondecreasing") == 0)
+              {
+                // STUB: stuff;
+              }
+              else if (octave::string::strcmpi (name, "nonincreasing") == 0)
+              {
+                // STUB: stuff;
+              }
+              else
+                UnknownAttributeError(name);
+              break;
+            }
             case 'u': // numel
             case 'c': // ncols
             case 'r': // nrows
@@ -250,42 +305,94 @@ static void CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
       }
       case 'b': // binary
       {
-        
+        if (octave::string::strcmpi (name, "binary") == 0)
+        {
+          // STUB: stuff
+        }
+        else
+          UnknownAttributeError(name);
         break;
       }
       case 'e': // even
       {
-        
+        if (octave::string::strcmpi (name, "even") == 0)
+        {
+          // STUB: stuff
+        }
+        else
+          UnknownAttributeError(name);
         break;
       }
       case 'o': // odd
       {
-        
+        if (octave::string::strcmpi (name, "odd") == 0)
+        {
+          // STUB: stuff
+        }
+        else
+          UnknownAttributeError(name);
         break;
       }
       case 'i': // integer, increasing
       {
-        
+        if (octave::string::strcmpi (name, "integer") == 0)
+        {
+          // STUB: stuff
+        }
+        else if (octave::string::strcmpi (name, "increasing") == 0)
+        {
+          // STUB: stuff
+        }
+        else
+          UnknownAttributeError(name);
         break;
       }
       case 'f': // finite
       {
-        
+        if (octave::string::strcmpi (name, "finite") == 0)
+        {
+          // STUB: stuff
+        }
+        else
+          UnknownAttributeError(name);
         break;
       }
       case 'p': // positive
       {
-        
+        if (octave::string::strcmpi (name, "positive") == 0)
+        {
+          // STUB: stuff
+        }
+        else
+          UnknownAttributeError(name);
         break;
       }
       case '>': // >, >=
       {
-        
+        if (len == 1)
+        {
+          // STUB: stuff
+        }
+        else if (len == 2 && std::tolower (name[1]) == '=')
+        {
+          // STUB: stuff
+        }
+        else
+          UnknownAttributeError(name);
         break;
       }
       case '<': // <, <=
       {
-        
+        if (len == 1)
+        {
+          // STUB: stuff
+        }
+        else if (len == 2 && std::tolower (name[1]) == '=')
+        {
+          // STUB: stuff
+        }
+        else
+          UnknownAttributeError(name);
         break;
       }
       default:

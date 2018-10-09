@@ -994,14 +994,10 @@ Values are arranged in a single vector (column or vector).\n\
 %!error <decreasing> validateattributes ([7 NaN 4 3 -5], {}, {"decreasing"})
 %!error <increasing> validateattributes ([7 8 4 9 20], {}, {"increasing"})
 %!error <increasing> validateattributes ([7 8 NaN 9 20], {}, {"increasing"})
-%!error <nonincreasing> validateattributes ([7 8 4 9 20], {},
-{"nonincreasing"})
-%!error <nonincreasing> validateattributes ([7 8 NaN 9 20], {},
-{"nonincreasing"})
-%!error <nondecreasing> validateattributes ([7 8 4 3 -5], {},
-{"nondecreasing"})
-%!error <nondecreasing> validateattributes ([7 NaN 4 3 -5], {},
-{"nondecreasing"})
+%!error <nonincreasing> validateattributes ([7 8 4 9 20], {}, {"nonincreasing"})
+%!error <nonincreasing> validateattributes ([7 8 NaN 9 20], {}, {"nonincreasing"})
+%!error <nondecreasing> validateattributes ([7 8 4 3 -5], {}, {"nondecreasing"})
+%!error <nondecreasing> validateattributes ([7 NaN 4 3 -5], {}, {"nondecreasing"})
 %!error <size> validateattributes (ones (5, 3, 6), {}, {"size", [5 4 7]})
 %!error <size> validateattributes (ones (5, 3, 6), {}, {"size", [5 NaN 7]})
 %!error <size> validateattributes (ones (5, 3, 6), {}, {"size", [5 3 6 2]})
@@ -1064,8 +1060,7 @@ Values are arranged in a single vector (column or vector).\n\
 %! validateattributes (zeros (3), {}, {"diag"});
 
 %!test
-%! validateattributes ([0 1 0 1], {"double", "uint8"}, {"binary", "size", [NaN
-4], "nonnan"});
+%! validateattributes ([0 1 0 1], {"double", "uint8"}, {"binary", "size", [NaN 4], "nonnan"});
 
 %!test
 %! try validateattributes (ones(1,2,3), {"numeric"}, {"2d"});

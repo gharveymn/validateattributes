@@ -172,6 +172,7 @@ chk_size (const dim_vector& A_dims, octave_idx_type A_ndims, const octave_value&
   if (attr_numel < A_ndims)
     return false;
 
+  attr_isnan = attr_val.isnan ();
 
   dims_as_mat = Matrix (attr_numel, 1);
   for (i = 0; i < attr_numel; i++)
@@ -180,13 +181,17 @@ chk_size (const dim_vector& A_dims, octave_idx_type A_ndims, const octave_value&
         {
           dims_as_mat(i) = A_dims(i);
         }
+      else if (! attr_isnan(i))
+        {
+          return false;
+        }
       else
         {
           dims_as_mat(i) = 0;
         }
     }
 
-  return has_all (op_el_or(dims_as_mat == attr_val, attr_val.isnan ()));
+  return has_all (op_el_or(dims_as_mat == attr_val, attr_isnan));
 
 }
 
@@ -895,8 +900,6 @@ Values are arranged in a single vector (column or vector).
 @seealso{isa, validatestring, inputParser}
 @end deftypefn */)
 {
-
-  // octave_idx_type i;
 
   octave_value ov_A;
   octave_value ov_cls;

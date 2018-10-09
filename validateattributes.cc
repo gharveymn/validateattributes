@@ -24,11 +24,12 @@ along with Octave; see the file COPYING.  If not, see
 #include <octave/oct-string.h>
 #include <octave/oct.h>
 
-template <typename T, typename U>
+template<typename T, typename U>
 static void
 print_error (T tag, U msg)
 {
   octave_value_list args (2);
+
   args(0) = octave_value (tag);
   args(1) = octave_value (msg);
   Ferror (args);
@@ -38,6 +39,18 @@ static void
 print_error (const std::string& msg)
 {
   Ferror (octave_value (msg));
+}
+
+static bool
+has_any (const octave_value& ov)
+{
+  return ((ov.any ()).bool_matrix_value ())(0);
+}
+
+static bool
+has_all (const octave_value& ov)
+{
+  return ((ov.all ()).bool_matrix_value ())(0);
 }
 
 static bool
@@ -51,13 +64,15 @@ static bool
 chk_class (const octave_value& ov_A, Array<std::string> cls)
 {
   octave_idx_type i;
-  std::string A_class = ov_A.class_name ();
+
+  std::string     A_class = ov_A.class_name ();
+
   for (i = 0; i < cls.numel (); i++)
     {
-      if (A_class == cls (i) || (cls (i) == "float" && ov_A.isfloat ())
-          || (cls (i) == "integer" && ov_A.isinteger ())
-          || (cls (i) == "numeric" && ov_A.isnumeric ())
-          || ov_A.is_instance_of (cls (i)))
+      if (A_class == cls(i) || (cls(i) == "float" && ov_A.isfloat ())
+          || (cls(i) == "integer" && ov_A.isinteger ())
+          || (cls(i) == "numeric" && ov_A.isnumeric ())
+          || ov_A.is_instance_of (cls(i)))
         {
           return true;
         }
@@ -69,15 +84,15 @@ static void
 cls_error (const std::string& err_ini, Array<std::string> cls,
            const std::string& A_class)
 {
-  octave_idx_type i;
-  std::set<std::__cxx11::basic_string<char> >::size_type k;
+  size_t                          i;
+  octave_idx_type                 j;
+  std::string                     err_str;
+  std::set<std::string>           classes;
   std::set<std::string>::iterator classes_iter;
-  std::set<std::string> classes;
-  std::string err_str;
 
-  for (i = 0; i < cls.numel (); i++)
+  for (j = 0; j < cls.numel (); j++)
     {
-      if (cls (i) == "integer")
+      if (cls(j) == "integer")
         {
           classes.insert ("int8");
           classes.insert ("int16");
@@ -88,12 +103,12 @@ cls_error (const std::string& err_ini, Array<std::string> cls,
           classes.insert ("uint32");
           classes.insert ("uint64");
         }
-      else if (cls (i) == "float")
+      else if (cls(j) == "float")
         {
           classes.insert ("single");
           classes.insert ("double");
         }
-      else if (cls (i) == "numeric")
+      else if (cls(j) == "numeric")
         {
           classes.insert ("int8");
           classes.insert ("int16");
@@ -108,14 +123,14 @@ cls_error (const std::string& err_ini, Array<std::string> cls,
         }
       else
         {
-          classes.insert (cls (i));
+          classes.insert (cls(j));
         }
     }
 
   err_str = err_ini + " must be of class:\n\n ";
 
   classes_iter = classes.begin ();
-  for (k = 0; k < classes.size (); k++, classes_iter++)
+  for (i = 0; i < classes.size (); i++, classes_iter++)
     {
       err_str += " " + *classes_iter;
     }
@@ -138,50 +153,66 @@ err_attr (const std::string& attr_name)
 }
 
 static bool
-chk_size (const dim_vector& A_dims, octave_idx_type A_ndims, const NDArray& attr_dims,
-          octave_idx_type attr_ndims)
+chk_size (const dim_vector& A_dims, octave_idx_type A_ndims, const octave_value& attr_val)
 {
 
   int i;
+  Matrix dims_as_mat;
+  boolMatrix attr_isnan;
 
-  if (attr_ndims < A_ndims)
+  octave_idx_type attr_numel = attr_val.numel ();
+
+  if (attr_numel < A_ndims)
     return false;
 
-  for (i = 0; i < attr_ndims; i++)
+  attr_isnan = attr_val.isnan ();
+
+  dims_as_mat = Matrix (attr_numel, 1);
+  for (i = 0; i < attr_numel; i++)
     {
-      if (! std::isnan (attr_dims(i)))
+      if(i < A_ndims)
         {
-          if (i >= A_ndims || A_dims(i) != attr_dims(i))
-            return false;
+          dims_as_mat(i) = A_dims(i);
+        }
+      else if (! attr_isnan(i))
+        {
+          return false;
+        }
+      else
+        {
+          dims_as_mat(i) = 0;
         }
     }
-  return true;
+
+  return has_all (op_el_or(dims_as_mat == attr_val, attr_isnan));
+
 }
 
-template <typename T>
+template<typename T>
 static void
 dims_str (T dims, octave_idx_type ndims, std::string& str)
 {
   octave_idx_type i;
+
   for (i = 0; i < ndims; i++)
     {
-      if (std::isnan (dims (i)))
+      if (std::isnan (dims(i)))
         str += "N";
       else
-        str += std::to_string (dims (i));
+        str += std::to_string (dims(i));
 
       if (i < ndims - 1)
         str += "x";
     }
 }
 
-template <typename Op>
+template<typename O>
 static bool
-chk_monotone (const octave_value& A_vec, Op op)
+chk_monotone (const octave_value& A_vec, O op)
 {
-  bool A_isnan = (((A_vec.isnan ()).any ()).bool_matrix_value ())(0);
-  octave_value A_diff = Fdiff (A_vec) (0);
-  bool A_ismono = ! ((op (A_diff, 0).any ()).bool_matrix_value ())(0);
+  octave_value A_diff = Fdiff (A_vec)(0);
+  bool A_isnan = has_any(A_vec.isnan ());
+  bool A_ismono = ! has_any(op (A_diff, 0));
   return ! A_isnan && A_ismono;
 }
 
@@ -192,24 +223,24 @@ chk_even (const octave_value& A_vec)
   args(0) = A_vec;
   args(1) = octave_value (2);
   octave_value A_rem = Frem (args)(0);
-  return ! (((A_rem != 0).any ()).bool_matrix_value ())(0);
+  return ! has_any(A_rem != 0);
 }
 
 static bool
 chk_odd (const octave_value& A_vec)
 {
   octave_value_list args (2);
-  args (0) = A_vec;
-  args (1) = octave_value (2);
+  args(0) = A_vec;
+  args(1) = octave_value (2);
   octave_value A_mod = Fmod (args)(0);
-  return ! (((A_mod != 1).any ()).bool_matrix_value ())(0);
+  return ! has_any(A_mod != 1);
 }
 
-template <typename Op>
+template<typename O>
 static bool
-chk_compare (const octave_value& A_vec, const octave_value& attr_val, Op op)
+chk_compare (const octave_value& A_vec, const octave_value& attr_val, O op)
 {
-  return ((op (A_vec, attr_val).all ()).bool_matrix_value ())(0);
+  return has_all(op (A_vec, attr_val).all ());
 }
 
 static void
@@ -217,26 +248,10 @@ err_compare (const std::string& tag, const std::string& cmp_str, const std::stri
              const octave_value& attr_val)
 {
   octave_value_list args (3);
-  args (0) = octave_value ("%s must be " + cmp_str + " %f");
-  args (1) = octave_value (err_ini);
-  args (2) = octave_value (attr_val);
-  print_error (tag, Fsprintf (args) (0));
-}
-
-template <typename T>
-static bool
-chk_diag (T A)
-{
-  // check nnz on the diagonal and compare it to overall nnz
-  Array<octave_idx_type> found = A.find ();
-  dim_vector A_dims = A.dims ();
-  octave_idx_type i;
-  for (i = 0; i < found.numel (); i++)
-    {
-      if (found(i) % A_dims(0) != found(i) / A_dims(0))
-        return false;
-    }
-  return true;
+  args(0) = octave_value ("%s must be " + cmp_str + " %f");
+  args(1) = octave_value (err_ini);
+  args(2) = octave_value (attr_val);
+  print_error (tag, Fsprintf (args)(0));
 }
 
 static bool
@@ -246,29 +261,10 @@ chk_diag (const octave_value& ov_A)
     return true;
   else if ((ov_A.isnumeric () || ov_A.islogical ()) && ov_A.ndims () == 2)
     {
-      if (ov_A.is_int8_type ())
-        return chk_diag (ov_A.int8_array_value ());
-      else if (ov_A.is_int16_type ())
-        return chk_diag (ov_A.int16_array_value ());
-      else if (ov_A.is_int32_type ())
-        return chk_diag (ov_A.int32_array_value ());
-      else if (ov_A.is_int64_type ())
-        return chk_diag (ov_A.int64_array_value ());
-      else if (ov_A.is_uint8_type ())
-        return chk_diag (ov_A.uint8_array_value ());
-      else if (ov_A.is_uint16_type ())
-        return chk_diag (ov_A.uint16_array_value ());
-      else if (ov_A.is_uint32_type ())
-        return chk_diag (ov_A.uint32_array_value ());
-      else if (ov_A.is_uint64_type ())
-        return chk_diag (ov_A.uint64_array_value ());
-      else if (ov_A.is_single_type ())
-        return chk_diag (ov_A.float_array_value ());
-      else if (ov_A.is_double_type ())
-        return chk_diag (ov_A.array_value ());
-      else if (ov_A.islogical ())
-        return chk_diag (ov_A.bool_array_value ());
-      return false;
+      octave_value_list dim_vecs = Ffind (ov_A, 2);
+      octave_value di = dim_vecs(0);
+      octave_value dj = dim_vecs(1);
+      return has_any (di != dj);
     }
   else
     return false;
@@ -278,13 +274,13 @@ static void
 chk_attributes (const octave_value& ov_A, const Cell& attr, const std::string& err_ini)
 {
 
+  size_t          len;
+  std::string     name;
+  octave_value    attr_val;
   octave_idx_type i;
-  octave_value attr_val;
-  std::string name;
-  size_t len;
 
-  octave_value A_vec = ov_A.reshape (dim_vector (ov_A.numel (), 1));
-  dim_vector A_dims = ov_A.dims ();
+  octave_value    A_vec = ov_A.reshape (dim_vector (ov_A.numel (), 1));
+  dim_vector      A_dims = ov_A.dims ();
   octave_idx_type A_ndims = ov_A.ndims ();
 
   i = 0;
@@ -356,7 +352,7 @@ chk_attributes (const octave_value& ov_A, const Cell& attr, const std::string& e
                 }
               else if (octave::string::strcmpi (name, "square")) // square
                 {
-                  if (A_ndims != 2 || A_dims(0) != A_dims (1))
+                  if (A_ndims != 2 || A_dims(0) != A_dims(1))
                     err_attr ("Octave:expected-square", err_ini, name);
                 }
               else if (octave::string::strcmpi (name, "size")) // size
@@ -364,7 +360,6 @@ chk_attributes (const octave_value& ov_A, const Cell& attr, const std::string& e
                   if (i >= attr.numel ())
                     print_error ("Incorrect number of attribute cell arguments");
                   attr_val = attr (i++);
-                  NDArray attr_dims = attr_val.array_value ();
                   octave_idx_type attr_ndims = attr_val.numel ();
                   if (! chk_size (A_dims, A_ndims, attr_dims, attr_ndims))
                     {
@@ -374,8 +369,8 @@ chk_attributes (const octave_value& ov_A, const Cell& attr, const std::string& e
                       std::string attr_dims_str;
                       dims_str (attr_dims, attr_ndims, attr_dims_str);
 
-                      print_error ("Octave:incorrect-size",
-                                   err_ini + " must be of size " += attr_dims_str
+                      print_error ("Octave:incorrect-size", err_ini
+                                   + " must be of size " += attr_dims_str
                                    += " but was " + A_dims_str);
                     }
                 }
@@ -387,7 +382,7 @@ chk_attributes (const octave_value& ov_A, const Cell& attr, const std::string& e
             {
               if (octave::string::strcmpi (name, "vector"))
                 {
-                  if (A_ndims != 2 || (A_dims(0) != 1 && A_dims (1) != 1))
+                  if (A_ndims != 2 || (A_dims(0) != 1 && A_dims(1) != 1))
                     err_attr ("Octave:expected-vector", err_ini, name);
                 }
               else
@@ -461,15 +456,14 @@ chk_attributes (const octave_value& ov_A, const Cell& attr, const std::string& e
                                                            "nonnan")) // nonnan
                                 {
                                   if (! ov_A.isinteger ()
-                                      && (((A_vec.isnan ()).any ())
-                                          .bool_matrix_value ())(0))
+                                      && has_any(A_vec.isnan ()))
                                     err_attr ("Octave:expected-nonnan", err_ini,
                                               name);
                                 }
                               else if (octave::string::strcmpi (
                                   name, "nonnegative")) // nonnegative
                                 {
-                                  if ((((A_vec < 0).any ()).bool_matrix_value ())(0))
+                                  if (has_any(A_vec < 0))
                                     err_attr ("Octave:expected-nonnegative",
                                               err_ini, name);
                                 }
@@ -482,7 +476,7 @@ chk_attributes (const octave_value& ov_A, const Cell& attr, const std::string& e
                               if (octave::string::strcmpi (name,
                                                            "nonzero")) // nonzero
                                 {
-                                  if ((((A_vec == 0).any ()).bool_matrix_value ())(0))
+                                  if (has_any(A_vec == 0))
                                     err_attr ("Octave:expected-nonzero", err_ini,
                                               name);
                                 }
@@ -552,7 +546,7 @@ chk_attributes (const octave_value& ov_A, const Cell& attr, const std::string& e
                                          "arguments");
                           attr_val = attr (i++);
                           if (A_ndims < 2
-                              || A_dims (1) != attr_val.idx_type_value ())
+                              || A_dims(1) != attr_val.idx_type_value ())
                             {
                               print_error (
                                   "Octave:incorrect-numcols",
@@ -575,7 +569,7 @@ chk_attributes (const octave_value& ov_A, const Cell& attr, const std::string& e
                                          "arguments");
                           attr_val = attr (i++);
                           if (A_ndims < 1
-                              || A_dims (0) != attr_val.idx_type_value ())
+                              || A_dims(0) != attr_val.idx_type_value ())
                             {
                               print_error (
                                   "Octave:incorrect-numrows",
@@ -621,8 +615,7 @@ chk_attributes (const octave_value& ov_A, const Cell& attr, const std::string& e
               if (octave::string::strcmpi (name, "binary"))
                 {
                   if (! ov_A.islogical ()
-                      && (((op_el_and ((A_vec != 1), (A_vec != 0))).any ())
-                          .bool_matrix_value ())(0))
+                      && (has_any(op_el_and ((A_vec != 1), (A_vec != 0)))))
                     err_attr ("Octave:expected-binary", err_ini, name);
                 }
               else
@@ -633,7 +626,6 @@ chk_attributes (const octave_value& ov_A, const Cell& attr, const std::string& e
             {
               if (octave::string::strcmpi (name, "even"))
                 {
-
                   if (! chk_even (A_vec))
                     err_attr ("Octave:expected-even", err_ini, name);
                 }
@@ -657,8 +649,7 @@ chk_attributes (const octave_value& ov_A, const Cell& attr, const std::string& e
               if (octave::string::strcmpi (name, "integer")) // integer
                 {
                   if (! ov_A.isinteger ()
-                      && (((A_vec.ceil () != A_vec).any ())
-                          .bool_matrix_value ()) (0))
+                      && (has_any(A_vec.ceil () != A_vec)))
                     err_attr ("Octave:expected-integer", err_ini, name);
                 }
               else if (octave::string::strcmpi (name,
@@ -676,8 +667,7 @@ chk_attributes (const octave_value& ov_A, const Cell& attr, const std::string& e
               if (octave::string::strcmpi (name, "finite"))
                 {
                   if (! ov_A.isinteger ()
-                      && ! (((A_vec.isfinite ()).all ()).bool_matrix_value ()) (
-                          0))
+                      && ! has_all(A_vec.isfinite ()))
                     err_attr ("Octave:expected-finite", err_ini, name);
                 }
               else
@@ -688,7 +678,7 @@ chk_attributes (const octave_value& ov_A, const Cell& attr, const std::string& e
             {
               if (octave::string::strcmpi (name, "positive"))
                 {
-                  if ((((A_vec <= 0).any ()).bool_matrix_value ())(0))
+                  if (has_any(A_vec <= 0))
                     err_attr ("Octave:expected-positive", err_ini, name);
                 }
               else
@@ -903,15 +893,14 @@ Values are arranged in a single vector (column or vector).\n\
 @end deftypefn ")
 {
 
-  // octave_idx_type i;
-
   octave_value ov_A;
   octave_value ov_cls;
   octave_value ov_attr;
 
-  std::string A_class;
+  Cell               attr;
+  std::string        A_class;
   Array<std::string> cls;
-  Cell attr;
+
 
   std::string err_ini;
   std::string func_name;
@@ -924,8 +913,8 @@ Values are arranged in a single vector (column or vector).\n\
       return octave_value ();
     }
 
-  ov_A    = args(0);
-  ov_cls  = args(1);
+  ov_A = args(0);
+  ov_cls = args(1);
   ov_attr = args(2);
 
   if (! ov_cls.iscellstr ())

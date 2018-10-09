@@ -41,14 +41,14 @@ print_error (std::string msg)
 }
 
 static bool
-IsValidIndex (octave_value a)
+is_valid_idx (octave_value a)
 {
   return a.isnumeric () && a.numel () == 1 && a.scalar_value ()
          && a.scalar_value () == (a.fix ()).scalar_value ();
 }
 
 static bool
-CheckClass (octave_value ov_A, Array<std::string> cls)
+chk_class (octave_value ov_A, Array<std::string> cls)
 {
   octave_idx_type i;
   std::string A_class = ov_A.class_name ();
@@ -66,27 +66,7 @@ CheckClass (octave_value ov_A, Array<std::string> cls)
 }
 
 static void
-InsertIntegerClasses (std::set<std::string> &classes)
-{
-  classes.insert ("int8");
-  classes.insert ("int16");
-  classes.insert ("int32");
-  classes.insert ("int64");
-  classes.insert ("uint8");
-  classes.insert ("uint16");
-  classes.insert ("uint32");
-  classes.insert ("uint64");
-}
-
-static void
-InsertFloatClasses (std::set<std::string> &classes)
-{
-  classes.insert ("single");
-  classes.insert ("double");
-}
-
-static void
-ClassNotFoundError (std::string err_ini, Array<std::string> cls,
+cls_error (std::string err_ini, Array<std::string> cls,
                     std::string A_class)
 {
   octave_idx_type i;
@@ -99,16 +79,32 @@ ClassNotFoundError (std::string err_ini, Array<std::string> cls,
     {
       if (cls (i) == "integer")
         {
-          InsertIntegerClasses (classes);
+          classes.insert ("int8");
+          classes.insert ("int16");
+          classes.insert ("int32");
+          classes.insert ("int64");
+          classes.insert ("uint8");
+          classes.insert ("uint16");
+          classes.insert ("uint32");
+          classes.insert ("uint64");
         }
       else if (cls (i) == "float")
         {
-          InsertFloatClasses (classes);
+          classes.insert ("single");
+          classes.insert ("double");
         }
       else if (cls (i) == "numeric")
         {
-          InsertIntegerClasses (classes);
-          InsertFloatClasses (classes);
+          classes.insert ("int8");
+          classes.insert ("int16");
+          classes.insert ("int32");
+          classes.insert ("int64");
+          classes.insert ("uint8");
+          classes.insert ("uint16");
+          classes.insert ("uint32");
+          classes.insert ("uint64");
+          classes.insert ("single");
+          classes.insert ("double");
         }
       else
         {
@@ -129,20 +125,20 @@ ClassNotFoundError (std::string err_ini, Array<std::string> cls,
 }
 
 static void
-AttributeError (std::string err_id, std::string err_ini, std::string attr_name)
+err_attr (std::string err_id, std::string err_ini, std::string attr_name)
 {
   print_error (err_id, err_ini + " must be " + attr_name);
 }
 
 static void
-UnknownAttributeError (std::string attr_name)
+err_attr (std::string attr_name)
 {
   print_error ("Octave:invalid-input-arg",
                "validateattributes: unknown ATTRIBUTE " + attr_name);
 }
 
 static bool
-CheckSize (dim_vector A_dims, octave_idx_type A_ndims, NDArray attr_dims,
+chk_size (dim_vector A_dims, octave_idx_type A_ndims, NDArray attr_dims,
            octave_idx_type attr_ndims)
 {
 
@@ -153,13 +149,13 @@ CheckSize (dim_vector A_dims, octave_idx_type A_ndims, NDArray attr_dims,
 
   for (i = 0; i < attr_ndims; i++)
     {
-      if (!std::isnan (attr_dims(i)))
+      if (! std::isnan (attr_dims(i)))
         {
           if (i >= A_ndims)
             {
               return false;
             }
-          else if (!std::isnan (A_dims(i)) && A_dims(i) != attr_dims(i))
+          else if (! std::isnan (A_dims(i)) && A_dims(i) != attr_dims(i))
             {
               return false;
             }
@@ -170,7 +166,7 @@ CheckSize (dim_vector A_dims, octave_idx_type A_ndims, NDArray attr_dims,
 
 template <typename T>
 static void
-WriteDimsString (T dims, octave_idx_type ndims, std::string &str)
+dims_str (T dims, octave_idx_type ndims, std::string &str)
 {
   octave_idx_type i;
   for (i = 0; i < ndims; i++)
@@ -187,43 +183,43 @@ WriteDimsString (T dims, octave_idx_type ndims, std::string &str)
 
 template <typename Op>
 static bool
-CheckMonotone (octave_value A_vec, Op op)
+chk_monotone (octave_value A_vec, Op op)
 {
   bool A_isnan = (((A_vec.isnan ()).any ()).bool_matrix_value ())(0);
   octave_value A_diff = Fdiff (A_vec) (0);
-  bool A_ismono = !((op (A_diff, 0).any ()).bool_matrix_value ())(0);
-  return !A_isnan && A_ismono;
+  bool A_ismono = ! ((op (A_diff, 0).any ()).bool_matrix_value ())(0);
+  return ! A_isnan && A_ismono;
 }
 
 static bool
-CheckEven (octave_value A_vec)
+chk_even (octave_value A_vec)
 {
   octave_value_list args (2);
   args(0) = A_vec;
   args(1) = octave_value (2);
   octave_value A_rem = Frem (args)(0);
-  return !(((A_rem != 0).any ()).bool_matrix_value ())(0);
+  return ! (((A_rem != 0).any ()).bool_matrix_value ())(0);
 }
 
 static bool
-CheckOdd (octave_value A_vec)
+chk_odd (octave_value A_vec)
 {
   octave_value_list args (2);
   args (0) = A_vec;
   args (1) = octave_value (2);
   octave_value A_mod = Fmod (args)(0);
-  return !(((A_mod != 1).any ()).bool_matrix_value ())(0);
+  return ! (((A_mod != 1).any ()).bool_matrix_value ())(0);
 }
 
 template <typename Op>
 static bool
-CheckCompare (octave_value A_vec, octave_value attr_val, Op op)
+chk_compare (octave_value A_vec, octave_value attr_val, Op op)
 {
   return ((op (A_vec, attr_val).all ()).bool_matrix_value ())(0);
 }
 
 static void
-ComparisonError (std::string tag, std::string cmp_str, std::string err_ini,
+err_compare (std::string tag, std::string cmp_str, std::string err_ini,
                  octave_value attr_val)
 {
   octave_value_list args (3);
@@ -235,7 +231,7 @@ ComparisonError (std::string tag, std::string cmp_str, std::string err_ini,
 
 template <typename T>
 static bool
-CheckMatrixDiag (T A)
+chk_diag (T A)
 {
   // check nnz on the diagonal and compare it to overall nnz
   Array<octave_idx_type> found = A.find ();
@@ -250,34 +246,34 @@ CheckMatrixDiag (T A)
 }
 
 static bool
-CheckDiag (octave_value ov_A)
+chk_diag (octave_value ov_A)
 {
   if (ov_A.is_diag_matrix ())
     return true;
   else if ((ov_A.isnumeric () || ov_A.islogical ()) && ov_A.ndims () == 2)
     {
       if (ov_A.is_int8_type ())
-        return CheckMatrixDiag (ov_A.int8_array_value ());
+        return chk_diag (ov_A.int8_array_value ());
       else if (ov_A.is_int16_type ())
-        return CheckMatrixDiag (ov_A.int16_array_value ());
+        return chk_diag (ov_A.int16_array_value ());
       else if (ov_A.is_int32_type ())
-        return CheckMatrixDiag (ov_A.int32_array_value ());
+        return chk_diag (ov_A.int32_array_value ());
       else if (ov_A.is_int64_type ())
-        return CheckMatrixDiag (ov_A.int64_array_value ());
+        return chk_diag (ov_A.int64_array_value ());
       else if (ov_A.is_uint8_type ())
-        return CheckMatrixDiag (ov_A.uint8_array_value ());
+        return chk_diag (ov_A.uint8_array_value ());
       else if (ov_A.is_uint16_type ())
-        return CheckMatrixDiag (ov_A.uint16_array_value ());
+        return chk_diag (ov_A.uint16_array_value ());
       else if (ov_A.is_uint32_type ())
-        return CheckMatrixDiag (ov_A.uint32_array_value ());
+        return chk_diag (ov_A.uint32_array_value ());
       else if (ov_A.is_uint64_type ())
-        return CheckMatrixDiag (ov_A.uint64_array_value ());
+        return chk_diag (ov_A.uint64_array_value ());
       else if (ov_A.is_single_type ())
-        return CheckMatrixDiag (ov_A.float_array_value ());
+        return chk_diag (ov_A.float_array_value ());
       else if (ov_A.is_double_type ())
-        return CheckMatrixDiag (ov_A.array_value ());
+        return chk_diag (ov_A.array_value ());
       else if (ov_A.islogical ())
-        return CheckMatrixDiag (ov_A.bool_array_value ());
+        return chk_diag (ov_A.bool_array_value ());
       return false;
     }
   else
@@ -285,7 +281,7 @@ CheckDiag (octave_value ov_A)
 }
 
 static void
-CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
+chk_attributes (octave_value ov_A, Cell attr, std::string err_ini)
 {
 
   octave_idx_type i;
@@ -304,7 +300,7 @@ CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
       len = name.length ();
 
       if (len < 1)
-        UnknownAttributeError (name);
+        err_attr (name);
 
       switch (std::tolower (name[0]))
         {
@@ -313,10 +309,10 @@ CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
             if (len == 2 && std::tolower (name[1]) == 'd')
               {
                 if (A_ndims != 2)
-                  AttributeError ("Octave:expected-2d", err_ini, name);
+                  err_attr ("Octave:expected-2d", err_ini, name);
               }
             else
-              UnknownAttributeError (name);
+              err_attr (name);
             break;
           }
         case '3': // 3d
@@ -324,10 +320,10 @@ CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
             if (len == 2 && std::tolower (name[1]) == 'd')
               {
                 if (A_ndims > 3)
-                  AttributeError ("Octave:expected-3d", err_ini, name);
+                  err_attr ("Octave:expected-3d", err_ini, name);
               }
             else
-              UnknownAttributeError (name);
+              err_attr (name);
             break;
           }
         case 'c': // column
@@ -335,10 +331,10 @@ CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
             if (octave::string::strcmpi (name, "column"))
               {
                 if (A_ndims != 2 || A_dims(1) != 1)
-                  AttributeError ("Octave:expected-column", err_ini, name);
+                  err_attr ("Octave:expected-column", err_ini, name);
               }
             else
-              UnknownAttributeError (name);
+              err_attr (name);
             break;
           }
         case 'r': // row, real
@@ -346,15 +342,15 @@ CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
             if (octave::string::strcmpi (name, "row")) // row
               {
                 if (A_ndims != 2 || A_dims(0) != 1)
-                  AttributeError ("Octave:expected-row", err_ini, name);
+                  err_attr ("Octave:expected-row", err_ini, name);
               }
             else if (octave::string::strcmpi (name, "real")) // real
               {
-                if (!ov_A.isreal ())
-                  AttributeError ("Octave:expected-real", err_ini, name);
+                if (! ov_A.isreal ())
+                  err_attr ("Octave:expected-real", err_ini, name);
               }
             else
-              UnknownAttributeError (name);
+              err_attr (name);
             break;
           }
         case 's': // scalar, square, size,
@@ -362,12 +358,12 @@ CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
             if (octave::string::strcmpi (name, "scalar")) // scalar
               {
                 if (ov_A.numel () != 1)
-                  AttributeError ("Octave:expected-scalar", err_ini, name);
+                  err_attr ("Octave:expected-scalar", err_ini, name);
               }
             else if (octave::string::strcmpi (name, "square")) // square
               {
                 if (A_ndims != 2 || A_dims(0) != A_dims (1))
-                  AttributeError ("Octave:expected-square", err_ini, name);
+                  err_attr ("Octave:expected-square", err_ini, name);
               }
             else if (octave::string::strcmpi (name, "size")) // size
               {
@@ -376,13 +372,13 @@ CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
                 attr_val = attr (i++);
                 NDArray attr_dims = attr_val.array_value ();
                 octave_idx_type attr_ndims = attr_val.numel ();
-                if (!CheckSize (A_dims, A_ndims, attr_dims, attr_ndims))
+                if (! chk_size (A_dims, A_ndims, attr_dims, attr_ndims))
                   {
                     std::string A_dims_str;
-                    WriteDimsString (A_dims, A_ndims, A_dims_str);
+                    dims_str (A_dims, A_ndims, A_dims_str);
 
                     std::string attr_dims_str;
-                    WriteDimsString (attr_dims, attr_ndims, attr_dims_str);
+                    dims_str (attr_dims, attr_ndims, attr_dims_str);
 
                     print_error ("Octave:incorrect-size",
                                  err_ini + " must be of size " + attr_dims_str
@@ -390,7 +386,7 @@ CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
                   }
               }
             else
-              UnknownAttributeError (name);
+              err_attr (name);
             break;
           }
         case 'v': // vector
@@ -398,203 +394,245 @@ CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
             if (octave::string::strcmpi (name, "vector"))
               {
                 if (A_ndims != 2 || (A_dims(0) != 1 && A_dims (1) != 1))
-                  AttributeError ("Octave:expected-vector", err_ini, name);
+                  err_attr ("Octave:expected-vector", err_ini, name);
               }
             else
-              UnknownAttributeError (name);
+              err_attr (name);
             break;
           }
         case 'd': // diag, decreasing
           {
             if (octave::string::strcmpi (name, "diag")) // diag
               {
-                if (!CheckDiag (ov_A))
-                  AttributeError ("Octave:expected-diag", err_ini, name);
+                if (! chk_diag (ov_A))
+                  err_attr ("Octave:expected-diag", err_ini, name);
               }
             else if (octave::string::strcmpi (name,
                                               "decreasing")) // decreasing
               {
-                if (!CheckMonotone (A_vec, op_ge))
-                  AttributeError ("Octave:expected-decreasing", err_ini, name);
+                if (! chk_monotone (A_vec, op_ge))
+                  err_attr ("Octave:expected-decreasing", err_ini, name);
               }
             else
-              UnknownAttributeError (name);
+              err_attr (name);
             break;
           }
         case 'n': // nonempty, nonsparse, nonnan, nonnegative, nonzero,
                   // nondecreasing, nonincreasing, numel, ncols, nrows, ndims,
           {
-            if (len > 1)
+            
+            if (len < 2)
+              err_attr (name);
+        
+            switch (std::tolower (name[1]))
               {
-                switch (std::tolower (name[1]))
-                  {
-                  case 'o': // nonempty, nonsparse, nonnan, nonnegative,
-                            // nonzero, nondecreasing, nonincreasing
+              case 'o': // nonempty, nonsparse, nonnan, nonnegative,
+                        // nonzero, nondecreasing, nonincreasing
+                {
+                  
+                  if (len < 4)
+                    err_attr (name);
+                  
+                  switch (std::tolower (name[3]))
+                    {
+                    case 'e':  // nonempty
                     {
                       if (octave::string::strcmpi (name,
-                                                   "nonempty")) // nonempty
+                                                "nonempty")) // nonempty
                         {
                           if (ov_A.isempty ())
-                            AttributeError ("Octave:expected-nonempty",
+                            err_attr ("Octave:expected-nonempty",
                                             err_ini, name);
                         }
-                      else if (octave::string::strcmpi (
-                                   name, "nonsparse")) // nonsparse
+                      else
+                          err_attr (name);
+                      break;
+                    }
+                    case 's': // nonsparse
+                    {
+                      if (octave::string::strcmpi (
+                                name, "nonsparse")) // nonsparse
                         {
                           if (ov_A.issparse ())
-                            AttributeError ("Octave:expected-nonsparse",
+                            err_attr ("Octave:expected-nonsparse",
                                             err_ini, name);
                         }
-                      else if (octave::string::strcmpi (name,
-                                                        "nonnan")) // nonnan
+                      else
+                          err_attr (name);
+                      break;
+                    }
+                    case 'n': // nonnan, nonnegative
+                    {
+                      if (octave::string::strcmpi (name,
+                                                    "nonnan")) // nonnan
                         {
-                          if (!ov_A.isinteger ()
+                          if (! ov_A.isinteger ()
                               && (((A_vec.isnan ()).any ())
                                       .bool_matrix_value ())(0))
-                            AttributeError ("Octave:expected-nonnan", err_ini,
+                            err_attr ("Octave:expected-nonnan", err_ini,
                                             name);
                         }
                       else if (octave::string::strcmpi (
-                                   name, "nonnegative")) // nonnegative
+                                    name, "nonnegative")) // nonnegative
                         {
                           if ((((A_vec < 0).any ()).bool_matrix_value ())(0))
-                            AttributeError ("Octave:expected-nonnegative",
+                            err_attr ("Octave:expected-nonnegative",
                                             err_ini, name);
                         }
-                      else if (octave::string::strcmpi (name,
-                                                        "nonzero")) // nonzero
+                      else
+                          err_attr (name);
+                      break;
+                    }
+                    case 'z': // nonzero
+                    {
+                      if (octave::string::strcmpi (name,
+                                                    "nonzero")) // nonzero
                         {
                           if ((((A_vec == 0).any ()).bool_matrix_value ())(0))
-                            AttributeError ("Octave:expected-nonzero", err_ini,
+                            err_attr ("Octave:expected-nonzero", err_ini,
                                             name);
                         }
-                      else if (octave::string::strcmpi (
-                                   name, "nondecreasing")) // nondecreasing
+                      else
+                          err_attr (name);
+                      break;
+                    }
+                    case 'd': // nondecreasing
+                    {
+                      if (octave::string::strcmpi (
+                                name, "nondecreasing")) // nondecreasing
                         {
-                          if (!CheckMonotone (A_vec, op_lt))
-                            AttributeError ("Octave:expected-nondecreasing",
+                          if (! chk_monotone (A_vec, op_lt))
+                            err_attr ("Octave:expected-nondecreasing",
                                             err_ini, name);
                         }
-                      else if (octave::string::strcmpi (
-                                   name, "nonincreasing")) // nonincreasing
+                      else
+                          err_attr (name);
+                      break;
+                    }
+                    case 'i': // nonincreasing
+                    {
+                      if (octave::string::strcmpi (
+                                name, "nonincreasing")) // nonincreasing
                         {
-                          if (!CheckMonotone (A_vec, op_gt))
-                            AttributeError ("Octave:expected-nonincreasing",
+                          if (! chk_monotone (A_vec, op_gt))
+                            err_attr ("Octave:expected-nonincreasing",
                                             err_ini, name);
                         }
                       else
-                        UnknownAttributeError (name);
-                      break;
+                          err_attr (name);
+                      break;  
                     }
-                  case 'u': // numel
+                    default: 
+                      err_attr (name);
+                    }
+                  break;
+                }
+              case 'u': // numel
+                {
+                  if (octave::string::strcmpi (name, "numel"))
                     {
-                      if (octave::string::strcmpi (name, "numel"))
+                      if (i >= attr.numel ())
+                        print_error ("Incorrect number of attribute cell "
+                                      "arguments");
+                      attr_val = attr (i++);
+                      if (ov_A.numel () != attr_val.idx_type_value ())
                         {
-                          if (i >= attr.numel ())
-                            print_error ("Incorrect number of attribute cell "
-                                         "arguments");
-                          attr_val = attr (i++);
-                          if (ov_A.numel () != attr_val.idx_type_value ())
-                            {
-                              print_error (
-                                  "Octave:incorrect-numel",
-                                  err_ini + " must have "
-                                      + std::to_string (
-                                            attr_val.idx_type_value ())
-                                      + " elements");
-                            }
+                          print_error (
+                              "Octave:incorrect-numel",
+                              err_ini + " must have "
+                                  + std::to_string (
+                                        attr_val.idx_type_value ())
+                                  + " elements");
                         }
-                      else
-                        UnknownAttributeError (name);
-                      break;
                     }
-                  case 'c': // ncols
+                  else
+                    err_attr (name);
+                  break;
+                }
+              case 'c': // ncols
+                {
+                  if (octave::string::strcmpi (name, "ncols"))
                     {
-                      if (octave::string::strcmpi (name, "ncols"))
+                      if (i >= attr.numel ())
+                        print_error ("Incorrect number of attribute cell "
+                                      "arguments");
+                      attr_val = attr (i++);
+                      if (A_ndims < 2
+                          || A_dims (1) != attr_val.idx_type_value ())
                         {
-                          if (i >= attr.numel ())
-                            print_error ("Incorrect number of attribute cell "
-                                         "arguments");
-                          attr_val = attr (i++);
-                          if (A_ndims < 2
-                              || A_dims (1) != attr_val.idx_type_value ())
-                            {
-                              print_error (
-                                  "Octave:incorrect-numcols",
-                                  err_ini + " must have "
-                                      + std::to_string (
-                                            attr_val.idx_type_value ())
-                                      + " columns");
-                            }
+                          print_error (
+                              "Octave:incorrect-numcols",
+                              err_ini + " must have "
+                                  + std::to_string (
+                                        attr_val.idx_type_value ())
+                                  + " columns");
                         }
-                      else
-                        UnknownAttributeError (name);
-                      break;
                     }
-                  case 'r': // nrows
+                  else
+                    err_attr (name);
+                  break;
+                }
+              case 'r': // nrows
+                {
+                  if (octave::string::strcmpi (name, "nrows"))
                     {
-                      if (octave::string::strcmpi (name, "nrows"))
+                      if (i >= attr.numel ())
+                        print_error ("Incorrect number of attribute cell "
+                                      "arguments");
+                      attr_val = attr (i++);
+                      if (A_ndims < 1
+                          || A_dims (0) != attr_val.idx_type_value ())
                         {
-                          if (i >= attr.numel ())
-                            print_error ("Incorrect number of attribute cell "
-                                         "arguments");
-                          attr_val = attr (i++);
-                          if (A_ndims < 1
-                              || A_dims (0) != attr_val.idx_type_value ())
-                            {
-                              print_error (
-                                  "Octave:incorrect-numrows",
-                                  err_ini + " must have "
-                                      + std::to_string (
-                                            attr_val.idx_type_value ())
-                                      + " rows");
-                            }
+                          print_error (
+                              "Octave:incorrect-numrows",
+                              err_ini + " must have "
+                                  + std::to_string (
+                                        attr_val.idx_type_value ())
+                                  + " rows");
                         }
-                      else
-                        UnknownAttributeError (name);
-                      break;
                     }
-                  case 'd': // ndims
+                  else
+                    err_attr (name);
+                  break;
+                }
+              case 'd': // ndims
+                {
+                  if (octave::string::strcmpi (name, "ndims"))
                     {
-                      if (octave::string::strcmpi (name, "ndims"))
+                      if (i >= attr.numel ())
+                        print_error ("Incorrect number of attribute cell "
+                                      "arguments");
+                      attr_val = attr (i++);
+                      if (A_ndims != attr_val.idx_type_value ())
                         {
-                          if (i >= attr.numel ())
-                            print_error ("Incorrect number of attribute cell "
-                                         "arguments");
-                          attr_val = attr (i++);
-                          if (A_ndims != attr_val.idx_type_value ())
-                            {
-                              print_error (
-                                  "Octave:incorrect-numdims",
-                                  err_ini + " must have "
-                                      + std::to_string (
-                                            attr_val.idx_type_value ())
-                                      + " dimensions");
-                            }
+                          print_error (
+                              "Octave:incorrect-numdims",
+                              err_ini + " must have "
+                                  + std::to_string (
+                                        attr_val.idx_type_value ())
+                                  + " dimensions");
                         }
-                      else
-                        UnknownAttributeError (name);
-                      break;
                     }
-                  default:
-                    UnknownAttributeError (name);
-                  }
+                  else
+                    err_attr (name);
+                  break;
+                }
+              default:
+                err_attr (name);
               }
-            else
-              UnknownAttributeError (name);
             break;
           }
         case 'b': // binary
           {
             if (octave::string::strcmpi (name, "binary"))
               {
-                if (!ov_A.islogical ()
+                if (! ov_A.islogical ()
                     && (((op_el_and ((A_vec != 1), (A_vec != 0))).any ())
                             .bool_matrix_value ())(0))
-                  AttributeError ("Octave:expected-binary", err_ini, name);
+                  err_attr ("Octave:expected-binary", err_ini, name);
               }
             else
-              UnknownAttributeError (name);
+              err_attr (name);
             break;
           }
         case 'e': // even
@@ -602,54 +640,54 @@ CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
             if (octave::string::strcmpi (name, "even"))
               {
 
-                if (!CheckEven (A_vec))
-                  AttributeError ("Octave:expected-even", err_ini, name);
+                if (! chk_even (A_vec))
+                  err_attr ("Octave:expected-even", err_ini, name);
               }
             else
-              UnknownAttributeError (name);
+              err_attr (name);
             break;
           }
         case 'o': // odd
           {
             if (octave::string::strcmpi (name, "odd"))
               {
-                if (!CheckOdd (A_vec))
-                  AttributeError ("Octave:expected-odd", err_ini, name);
+                if (! chk_odd (A_vec))
+                  err_attr ("Octave:expected-odd", err_ini, name);
               }
             else
-              UnknownAttributeError (name);
+              err_attr (name);
             break;
           }
         case 'i': // integer, increasing
           {
             if (octave::string::strcmpi (name, "integer")) // integer
               {
-                if (!ov_A.isinteger ()
+                if (! ov_A.isinteger ()
                     && (((A_vec.ceil () != A_vec).any ())
                             .bool_matrix_value ()) (0))
-                  AttributeError ("Octave:expected-integer", err_ini, name);
+                  err_attr ("Octave:expected-integer", err_ini, name);
               }
             else if (octave::string::strcmpi (name,
                                               "increasing")) // increasing
               {
-                if (!CheckMonotone (A_vec, op_le))
-                  AttributeError ("Octave:expected-increasing", err_ini, name);
+                if (! chk_monotone (A_vec, op_le))
+                  err_attr ("Octave:expected-increasing", err_ini, name);
               }
             else
-              UnknownAttributeError (name);
+              err_attr (name);
             break;
           }
         case 'f': // finite
           {
             if (octave::string::strcmpi (name, "finite"))
               {
-                if (!ov_A.isinteger ()
-                    && !(((A_vec.isfinite ()).all ()).bool_matrix_value ()) (
+                if (! ov_A.isinteger ()
+                    && ! (((A_vec.isfinite ()).all ()).bool_matrix_value ()) (
                            0))
-                  AttributeError ("Octave:expected-finite", err_ini, name);
+                  err_attr ("Octave:expected-finite", err_ini, name);
               }
             else
-              UnknownAttributeError (name);
+              err_attr (name);
             break;
           }
         case 'p': // positive
@@ -657,10 +695,10 @@ CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
             if (octave::string::strcmpi (name, "positive"))
               {
                 if ((((A_vec <= 0).any ()).bool_matrix_value ())(0))
-                  AttributeError ("Octave:expected-positive", err_ini, name);
+                  err_attr ("Octave:expected-positive", err_ini, name);
               }
             else
-              UnknownAttributeError (name);
+              err_attr (name);
             break;
           }
         case '>': // >, >=
@@ -670,8 +708,8 @@ CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
                 if (i >= attr.numel ())
                   print_error ("Incorrect number of attribute cell arguments");
                 attr_val = attr (i++);
-                if (!CheckCompare (A_vec, attr_val, op_gt))
-                  ComparisonError ("Octave:expected-greater", "greater than",
+                if (! chk_compare (A_vec, attr_val, op_gt))
+                  err_compare ("Octave:expected-greater", "greater than",
                                    err_ini, attr_val);
               }
             else if (len == 2 && std::tolower (name[1]) == '=') // >=
@@ -679,13 +717,13 @@ CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
                 if (i >= attr.numel ())
                   print_error ("Incorrect number of attribute cell arguments");
                 attr_val = attr (i++);
-                if (!CheckCompare (A_vec, attr_val, op_ge))
-                  ComparisonError ("Octave:expected-greater-equal",
+                if (! chk_compare (A_vec, attr_val, op_ge))
+                  err_compare ("Octave:expected-greater-equal",
                                    "greater than or equal to", err_ini,
                                    attr_val);
               }
             else
-              UnknownAttributeError (name);
+              err_attr (name);
             break;
           }
         case '<': // <, <=
@@ -695,8 +733,8 @@ CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
                 if (i >= attr.numel ())
                   print_error ("Incorrect number of attribute cell arguments");
                 attr_val = attr (i++);
-                if (!CheckCompare (A_vec, attr_val, op_lt))
-                  ComparisonError ("Octave:expected-less", "less than",
+                if (! chk_compare (A_vec, attr_val, op_lt))
+                  err_compare ("Octave:expected-less", "less than",
                                    err_ini, attr_val);
               }
             else if (len == 2 && std::tolower (name[1]) == '=') // <=
@@ -704,16 +742,16 @@ CheckAttributes (octave_value ov_A, Cell attr, std::string err_ini)
                 if (i >= attr.numel ())
                   print_error ("Incorrect number of attribute cell arguments");
                 attr_val = attr (i++);
-                if (!CheckCompare (A_vec, attr_val, op_le))
-                  ComparisonError ("Octave:expected-less-equal",
+                if (! chk_compare (A_vec, attr_val, op_le))
+                  err_compare ("Octave:expected-less-equal",
                                    "less than or equal to", err_ini, attr_val);
               }
             else
-              UnknownAttributeError (name);
+              err_attr (name);
             break;
           }
         default:
-          UnknownAttributeError (name);
+          err_attr (name);
         }
     }
 }
@@ -896,13 +934,13 @@ Values are arranged in a single vector (column or vector).\n\
   ov_cls  = args(1);
   ov_attr = args(2);
 
-  if (!ov_cls.iscellstr ())
+  if (! ov_cls.iscellstr ())
     {
       print_error (
           "Octave:invalid-type",
           "validateattributes: CLASSES must be a cell array of strings");
     }
-  else if (!ov_attr.iscell ())
+  else if (! ov_attr.iscell ())
     {
       print_error ("Octave:invalid-type",
                    "validateattributes: ATTRIBUTES must be a cell array");
@@ -917,7 +955,7 @@ Values are arranged in a single vector (column or vector).\n\
         {
           func_name = args(3).string_value () + ": ";
         }
-      else if (nargin == 4 && IsValidIndex (args(3)))
+      else if (nargin == 4 && is_valid_idx (args(3)))
         {
           var_name = "input " + std::to_string (args(3).idx_type_value ());
         }
@@ -930,7 +968,7 @@ Values are arranged in a single vector (column or vector).\n\
 
       if (nargin > 4)
         {
-          if (!args(4).is_string ())
+          if (! args(4).is_string ())
             {
               print_error ("Octave:invalid-type",
                            "validateattributes: VAR_NAME must be a string");
@@ -939,7 +977,7 @@ Values are arranged in a single vector (column or vector).\n\
 
           if (nargin > 5)
             {
-              if (!IsValidIndex (args(5)))
+              if (! is_valid_idx (args(5)))
                 {
                   print_error ("Octave:invalid-input-arg",
                                "validateattributes: ARG_IDX must be a "
@@ -953,12 +991,12 @@ Values are arranged in a single vector (column or vector).\n\
 
   err_ini = func_name + var_name;
 
-  if (!cls.isempty () && !CheckClass (ov_A, cls))
+  if (! cls.isempty () && ! chk_class (ov_A, cls))
     {
-      ClassNotFoundError (err_ini, cls, ov_A.class_name ());
+      cls_error (err_ini, cls, ov_A.class_name ());
     }
 
-  CheckAttributes (ov_A, attr, err_ini);
+  chk_attributes (ov_A, attr, err_ini);
 
   return octave_value_list ();
 }

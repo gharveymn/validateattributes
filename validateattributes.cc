@@ -41,6 +41,12 @@ print_error (const std::string& msg)
   Ferror (octave_value (msg));
 }
 
+static octave_value
+as_vector (const octave_value& ov)
+{
+  return ov.reshape (dim_vector (ov.numel (), 1));
+}
+
 static bool
 has_any (const octave_value& ov)
 {
@@ -65,7 +71,7 @@ chk_class (const octave_value& ov_A, Array<std::string> cls)
 {
   octave_idx_type i;
 
-  std::string     A_class = ov_A.class_name ();
+  std::string A_class = ov_A.class_name ();
 
   for (i = 0; i < cls.numel (); i++)
     {
@@ -165,7 +171,7 @@ chk_size (const dim_vector& A_dims, octave_idx_type A_ndims, const octave_value&
   if (attr_numel < A_ndims)
     return false;
 
-  attr_isnan = attr_val.isnan ();
+  attr_isnan = (attr_val.isnan ()).bool_matrix_value ();
 
   dims_as_mat = Matrix (attr_numel, 1);
   for (i = 0; i < attr_numel; i++)
@@ -183,27 +189,7 @@ chk_size (const dim_vector& A_dims, octave_idx_type A_ndims, const octave_value&
           dims_as_mat(i) = 0;
         }
     }
-
   return has_all (op_el_or(dims_as_mat == attr_val, attr_isnan));
-
-}
-
-template<typename T>
-static void
-dims_str (T dims, octave_idx_type ndims, std::string& str)
-{
-  octave_idx_type i;
-
-  for (i = 0; i < ndims; i++)
-    {
-      if (std::isnan (dims(i)))
-        str += "N";
-      else
-        str += std::to_string (dims(i));
-
-      if (i < ndims - 1)
-        str += "x";
-    }
 }
 
 template<typename O>
@@ -211,8 +197,8 @@ static bool
 chk_monotone (const octave_value& A_vec, O op)
 {
   octave_value A_diff = Fdiff (A_vec)(0);
-  bool A_isnan = has_any(A_vec.isnan ());
-  bool A_ismono = ! has_any(op (A_diff, 0));
+  bool A_isnan = has_any (A_vec.isnan ());
+  bool A_ismono = has_all (op (A_diff, 0)); // ex. greater than => check all A_diff > 0
   return ! A_isnan && A_ismono;
 }
 
@@ -222,8 +208,7 @@ chk_even (const octave_value& A_vec)
   octave_value_list args (2);
   args(0) = A_vec;
   args(1) = octave_value (2);
-  octave_value A_rem = Frem (args)(0);
-  return ! has_any(A_rem != 0);
+  return has_all (Frem (args)(0) == 0);
 }
 
 static bool
@@ -232,15 +217,14 @@ chk_odd (const octave_value& A_vec)
   octave_value_list args (2);
   args(0) = A_vec;
   args(1) = octave_value (2);
-  octave_value A_mod = Fmod (args)(0);
-  return ! has_any(A_mod != 1);
+  return has_all (Fmod (args)(0) == 1);
 }
 
 template<typename O>
 static bool
 chk_compare (const octave_value& A_vec, const octave_value& attr_val, O op)
 {
-  return has_all(op (A_vec, attr_val).all ());
+  return has_all (op (A_vec, attr_val).all ());
 }
 
 static void
@@ -262,9 +246,7 @@ chk_diag (const octave_value& ov_A)
   else if ((ov_A.isnumeric () || ov_A.islogical ()) && ov_A.ndims () == 2)
     {
       octave_value_list dim_vecs = Ffind (ov_A, 2);
-      octave_value di = dim_vecs(0);
-      octave_value dj = dim_vecs(1);
-      return has_any (di != dj);
+      return has_all (dim_vecs(0) == dim_vecs(1));
     }
   else
     return false;
@@ -279,8 +261,8 @@ chk_attributes (const octave_value& ov_A, const Cell& attr, const std::string& e
   octave_value    attr_val;
   octave_idx_type i;
 
-  octave_value    A_vec = ov_A.reshape (dim_vector (ov_A.numel (), 1));
-  dim_vector      A_dims = ov_A.dims ();
+  dim_vector      A_dims  = ov_A.dims ();
+  octave_value    A_vec   = as_vector(ov_A);
   octave_idx_type A_ndims = ov_A.ndims ();
 
   i = 0;
@@ -360,18 +342,25 @@ chk_attributes (const octave_value& ov_A, const Cell& attr, const std::string& e
                   if (i >= attr.numel ())
                     print_error ("Incorrect number of attribute cell arguments");
                   attr_val = attr (i++);
-                  octave_idx_type attr_ndims = attr_val.numel ();
-                  if (! chk_size (A_dims, A_ndims, attr_dims, attr_ndims))
+                  if (! chk_size (A_dims, A_ndims, as_vector(attr_val)))
                     {
-                      std::string A_dims_str;
-                      dims_str (A_dims, A_ndims, A_dims_str);
+                      octave_value_list args (3);
+                      args (0) = octave_value ("%dx");
+                      args (1) = Fsize (ov_A)(0);
+                      std::string A_dims_str = Fsprintf (args.slice (0, 2))(0).string_value ();
+                      A_dims_str = A_dims_str.substr (0, A_dims_str.length () - 1);
 
-                      std::string attr_dims_str;
-                      dims_str (attr_dims, attr_ndims, attr_dims_str);
+                      args (0) = octave_value ("%ix");
+                      args (1) = attr_val;
 
-                      print_error ("Octave:incorrect-size", err_ini
-                                   + " must be of size " += attr_dims_str
-                                   += " but was " + A_dims_str);
+                      args (0) = Fsprintf (args.slice (0, 2))(0);
+                      args (1) = octave_value ("NaN");
+                      args (2) = octave_value ("N");
+                      std::string attr_dims_str = (Fstrrep(args)(0).string_value ());
+                      attr_dims_str = attr_dims_str.substr (0, attr_dims_str.length () - 1);
+
+                      print_error ("Octave:incorrect-size", err_ini + " must be of size "
+                                   += attr_dims_str += " but was " + A_dims_str);
                     }
                 }
               else
@@ -399,7 +388,7 @@ chk_attributes (const octave_value& ov_A, const Cell& attr, const std::string& e
               else if (octave::string::strcmpi (name,
                                                 "decreasing")) // decreasing
                 {
-                  if (! chk_monotone (A_vec, op_ge))
+                  if (! chk_monotone (A_vec, op_lt))
                     err_attr ("Octave:expected-decreasing", err_ini, name);
                 }
               else
@@ -407,7 +396,7 @@ chk_attributes (const octave_value& ov_A, const Cell& attr, const std::string& e
               break;
             }
           case 'n': // nonempty, nonsparse, nonnan, nonnegative, nonzero,
-            // nondecreasing, nonincreasing, numel, ncols, nrows, ndims,
+            // nondecreasing, nonincreasing, numel, ncols, nrows, ndims
             {
 
               if (len < 2)
@@ -489,7 +478,7 @@ chk_attributes (const octave_value& ov_A, const Cell& attr, const std::string& e
                               if (octave::string::strcmpi (
                                   name, "nondecreasing")) // nondecreasing
                                 {
-                                  if (! chk_monotone (A_vec, op_lt))
+                                  if (! chk_monotone (A_vec, op_ge))
                                     err_attr ("Octave:expected-nondecreasing",
                                               err_ini, name);
                                 }
@@ -502,7 +491,7 @@ chk_attributes (const octave_value& ov_A, const Cell& attr, const std::string& e
                               if (octave::string::strcmpi (
                                   name, "nonincreasing")) // nonincreasing
                                 {
-                                  if (! chk_monotone (A_vec, op_gt))
+                                  if (! chk_monotone (A_vec, op_le))
                                     err_attr ("Octave:expected-nonincreasing",
                                               err_ini, name);
                                 }
@@ -655,7 +644,7 @@ chk_attributes (const octave_value& ov_A, const Cell& attr, const std::string& e
               else if (octave::string::strcmpi (name,
                                                 "increasing")) // increasing
                 {
-                  if (! chk_monotone (A_vec, op_le))
+                  if (! chk_monotone (A_vec, op_gt))
                     err_attr ("Octave:expected-increasing", err_ini, name);
                 }
               else

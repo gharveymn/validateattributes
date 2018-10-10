@@ -31,21 +31,37 @@ along with Octave; see the file COPYING.  If not, see
 #include "error.h"
 #include "ovl.h"
 
-template<typename T, typename U>
 static void
-print_error (T tag, U msg)
+print_error (const std::string& tag, const octave_value& msg)
 {
   octave_value_list args (2);
-
   args(0) = octave_value (tag);
-  args(1) = octave_value (msg);
+  args(1) = msg;
   Ferror (args);
+}
+
+static void
+print_error (const char* tag, const char* msg)
+{
+  error_with_id (tag, msg);
+}
+
+static void
+print_error (const char* tag, const std::string& msg)
+{
+  error_with_id (tag, msg.c_str ());
+}
+
+static void
+print_error (const std::string& tag, const std::string& msg)
+{
+  error_with_id (tag.c_str (), msg.c_str ());
 }
 
 static void
 print_error (const std::string& msg)
 {
-  Ferror (octave_value (msg));
+  error (msg.c_str ());
 }
 
 static octave_value
@@ -197,6 +213,29 @@ chk_size (const dim_vector& A_dims, octave_idx_type A_ndims, const octave_value&
         }
     }
   return has_all (op_el_or(dims_as_mat == attr_val, attr_isnan));
+}
+
+static void
+err_size (const octave_value& ov_A, const octave_value& attr_val,
+          const std::string& err_ini)
+{
+  octave_value_list args (3);
+  args (0) = octave_value ("%dx");
+  args (1) = Fsize (ov_A)(0);
+  std::string A_dims_str = Fsprintf (args.slice (0, 2))(0).string_value ();
+  A_dims_str = A_dims_str.substr (0, A_dims_str.length () - 1);
+
+  args (0) = octave_value ("%ix");
+  args (1) = attr_val;
+
+  args (0) = Fsprintf (args.slice (0, 2))(0);
+  args (1) = octave_value ("NaN");
+  args (2) = octave_value ("N");
+  std::string attr_dims_str = (Fstrrep(args)(0).string_value ());
+  attr_dims_str = attr_dims_str.substr (0, attr_dims_str.length () - 1);
+
+  print_error ("Octave:incorrect-size", err_ini + " must be of size "
+               += attr_dims_str += " but was " + A_dims_str);
 }
 
 template<typename O>
@@ -351,23 +390,7 @@ chk_attributes (const octave_value& ov_A, const Cell& attr, const std::string& e
                   attr_val = attr (i++);
                   if (! chk_size (A_dims, A_ndims, as_vector(attr_val)))
                     {
-                      octave_value_list args (3);
-                      args (0) = octave_value ("%dx");
-                      args (1) = Fsize (ov_A)(0);
-                      std::string A_dims_str = Fsprintf (args.slice (0, 2))(0).string_value ();
-                      A_dims_str = A_dims_str.substr (0, A_dims_str.length () - 1);
-
-                      args (0) = octave_value ("%ix");
-                      args (1) = attr_val;
-
-                      args (0) = Fsprintf (args.slice (0, 2))(0);
-                      args (1) = octave_value ("NaN");
-                      args (2) = octave_value ("N");
-                      std::string attr_dims_str = (Fstrrep(args)(0).string_value ());
-                      attr_dims_str = attr_dims_str.substr (0, attr_dims_str.length () - 1);
-
-                      print_error ("Octave:incorrect-size", err_ini + " must be of size "
-                                   += attr_dims_str += " but was " + A_dims_str);
+                      err_size (ov_A, attr_val, err_ini);
                     }
                 }
               else
@@ -589,12 +612,10 @@ chk_attributes (const octave_value& ov_A, const Cell& attr, const std::string& e
                           attr_val = attr (i++);
                           if (A_ndims != attr_val.idx_type_value ())
                             {
-                              print_error (
-                                  "Octave:incorrect-numdims",
-                                  err_ini + " must have "
-                                  + std::to_string (
-                                      attr_val.idx_type_value ())
-                                  + " dimensions");
+                              print_error ("Octave:incorrect-numdims", err_ini
+                                           + " must have " + std::to_string (
+                                           attr_val.idx_type_value ())
+                                           + " dimensions");
                             }
                         }
                       else
@@ -611,7 +632,7 @@ chk_attributes (const octave_value& ov_A, const Cell& attr, const std::string& e
               if (octave::string::strcmpi (name, "binary"))
                 {
                   if (! ov_A.islogical ()
-                      && (has_any(op_el_and ((A_vec != 1), (A_vec != 0)))))
+                      && (has_any (op_el_and ((A_vec != 1), (A_vec != 0)))))
                     err_attr ("Octave:expected-binary", err_ini, name);
                 }
               else
@@ -645,7 +666,7 @@ chk_attributes (const octave_value& ov_A, const Cell& attr, const std::string& e
               if (octave::string::strcmpi (name, "integer")) // integer
                 {
                   if (! ov_A.isinteger ()
-                      && (has_any(A_vec.ceil () != A_vec)))
+                      && (has_any (A_vec.ceil () != A_vec)))
                     err_attr ("Octave:expected-integer", err_ini, name);
                 }
               else if (octave::string::strcmpi (name,
@@ -663,7 +684,7 @@ chk_attributes (const octave_value& ov_A, const Cell& attr, const std::string& e
               if (octave::string::strcmpi (name, "finite"))
                 {
                   if (! ov_A.isinteger ()
-                      && ! has_all(A_vec.isfinite ()))
+                      && ! has_all (A_vec.isfinite ()))
                     err_attr ("Octave:expected-finite", err_ini, name);
                 }
               else
@@ -674,7 +695,7 @@ chk_attributes (const octave_value& ov_A, const Cell& attr, const std::string& e
             {
               if (octave::string::strcmpi (name, "positive"))
                 {
-                  if (has_any(A_vec <= 0))
+                  if (has_any (A_vec <= 0))
                     err_attr ("Octave:expected-positive", err_ini, name);
                 }
               else
@@ -890,28 +911,25 @@ Values are arranged in a single vector (column or vector).
 @end deftypefn */)
 {
 
-  octave_value ov_A;
-  octave_value ov_cls;
-  octave_value ov_attr;
+  octave_value       ov_A;
+  octave_value       ov_cls;
+  octave_value       ov_attr;
 
-  Cell               attr;
   std::string        A_class;
   Array<std::string> cls;
+  Cell               attr;
 
+  std::string        err_ini;
+  std::string        func_name;
 
-  std::string err_ini;
-  std::string func_name;
-  std::string var_name = "input";
+  std::string        var_name = "input";
+  octave_idx_type    nargin   = args.length ();
 
-  octave_idx_type nargin = args.length ();
   if (nargin < 3 || nargin > 6)
-    {
-      print_usage ();
-      return octave_value ();
-    }
+    print_usage ();
 
-  ov_A = args(0);
-  ov_cls = args(1);
+  ov_A    = args(0);
+  ov_cls  = args(1);
   ov_attr = args(2);
 
   if (! ov_cls.iscellstr ())
@@ -926,7 +944,7 @@ Values are arranged in a single vector (column or vector).
                    "validateattributes: ATTRIBUTES must be a cell array");
     }
 
-  cls = ov_cls.cellstr_value ();
+  cls  = ov_cls.cellstr_value ();
   attr = ov_attr.cell_value ();
 
   if (nargin > 3)
@@ -1030,55 +1048,52 @@ Values are arranged in a single vector (column or vector).
 %!error <diag> validateattributes ([0 0 0; 0 0 0; 1 0 0], {}, {"diag"})
 %!error <diag> validateattributes (repmat (eye (3), [1 1 3]), {}, {"diag"})
 
-%!test
-%! validateattributes (rand (5), {"numeric"}, {});
-%! validateattributes (rand (5), {"float"}, {});
-%! validateattributes (rand (5), {"double"}, {});
-%! validateattributes ("text", {"char"}, {});
-%! validateattributes (rand (5), {}, {"2d"});
-%! validateattributes (rand (5), {}, {"3d"});
-%! validateattributes (rand (5, 5, 5), {}, {"3d"});
-%! validateattributes (rand (5, 1), {}, {"column"});
-%! validateattributes (rand (1, 5), {}, {"row"});
-%! validateattributes ("a", {}, {"scalar"});
-%! validateattributes (5, {}, {"scalar"});
-%! validateattributes (rand (1, 5), {}, {"vector"});
-%! validateattributes (rand (5, 1), {}, {"vector"});
-%! validateattributes (rand (5), {}, {"square"});
-%! validateattributes (rand (5), {}, {"nonempty"});
-%! validateattributes (rand (5), {}, {"nonsparse"});
-%! validateattributes ([0 1 0 1 0], {}, {"binary"});
-%! validateattributes (rand (5) > 0.5, {}, {"binary"});
-%! validateattributes ([8 4 0 6], {}, {"even"});
-%! validateattributes ([-1 3 5], {}, {"odd"});
-%! validateattributes ([8 4 0 6], {}, {"real"});
-%! validateattributes ([8 4i 0 6], {}, {"finite"});
-%! validateattributes (uint8 ([8 4]), {}, {"finite"});
-%! validateattributes ([8 Inf], {}, {"nonnan"});
-%! validateattributes ([0 7 4], {}, {"nonnegative"});
-%! validateattributes ([-8 7 4], {}, {"nonzero"});
-%! validateattributes ([8 7 4], {}, {"positive"});
-%! validateattributes ([8 7 4 -5], {}, {"decreasing"});
-%! validateattributes ([-8 -7 4 5], {}, {"increasing"});
-%! validateattributes ([8 4 4 -5], {}, {"nonincreasing"});
-%! validateattributes ([-8 -8 4 5], {}, {"nondecreasing"});
-%! validateattributes (rand (4, 6, 7, 2), {}, {"size", [4 6 7 2]});
-%! validateattributes (rand (4, 6, 7, 2), {}, {"size", [4 NaN 7 2]});
-%! validateattributes (rand (4, 6, 7, 2), {}, {"size", [4 6 NaN 2 NaN]});
-%! validateattributes (rand (6, 2), {}, {"numel", 12});
-%! validateattributes (rand (6, 2), {}, {"ncols", 2});
-%! validateattributes (rand (6, 2), {}, {"nrows", 6});
-%! validateattributes (rand (6, 2, 4, 5), {}, {"ndims", 4});
-%! validateattributes ([4 5 6 7], {}, {">", 3});
-%! validateattributes ([4 5 6 7], {}, {">=", 4});
-%! validateattributes ([4 5 6 7], {}, {"<", 8});
-%! validateattributes ([4 5 6 7], {}, {"<=", 7});
-%! validateattributes (eye (3), {}, {"diag"});
-%! validateattributes ([1 0 0; 0 1 0; 0 0 1], {}, {"diag"});
-%! validateattributes (zeros (3), {}, {"diag"});
-
-%!test
-%! validateattributes ([0 1 0 1], {"double", "uint8"}, {"binary", "size", [NaN 4], "nonnan"});
+%!test validateattributes (rand (5), {"numeric"}, {});
+%!test validateattributes (rand (5), {"float"}, {});
+%!test validateattributes (rand (5), {"double"}, {});
+%!test validateattributes ("text", {"char"}, {});
+%!test validateattributes (rand (5), {}, {"2d"});
+%!test validateattributes (rand (5), {}, {"3d"});
+%!test validateattributes (rand (5, 5, 5), {}, {"3d"});
+%!test validateattributes (rand (5, 1), {}, {"column"});
+%!test validateattributes (rand (1, 5), {}, {"row"});
+%!test validateattributes ("a", {}, {"scalar"});
+%!test validateattributes (5, {}, {"scalar"});
+%!test validateattributes (rand (1, 5), {}, {"vector"});
+%!test validateattributes (rand (5, 1), {}, {"vector"});
+%!test validateattributes (rand (5), {}, {"square"});
+%!test validateattributes (rand (5), {}, {"nonempty"});
+%!test validateattributes (rand (5), {}, {"nonsparse"});
+%!test validateattributes ([0 1 0 1 0], {}, {"binary"});
+%!test validateattributes (rand (5) > 0.5, {}, {"binary"});
+%!test validateattributes ([8 4 0 6], {}, {"even"});
+%!test validateattributes ([-1 3 5], {}, {"odd"});
+%!test validateattributes ([8 4 0 6], {}, {"real"});
+%!test validateattributes ([8 4i 0 6], {}, {"finite"});
+%!test validateattributes (uint8 ([8 4]), {}, {"finite"});
+%!test validateattributes ([8 Inf], {}, {"nonnan"});
+%!test validateattributes ([0 7 4], {}, {"nonnegative"});
+%!test validateattributes ([-8 7 4], {}, {"nonzero"});
+%!test validateattributes ([8 7 4], {}, {"positive"});
+%!test validateattributes ([8 7 4 -5], {}, {"decreasing"});
+%!test validateattributes ([-8 -7 4 5], {}, {"increasing"});
+%!test validateattributes ([8 4 4 -5], {}, {"nonincreasing"});
+%!test validateattributes ([-8 -8 4 5], {}, {"nondecreasing"});
+%!test validateattributes (rand (4, 6, 7, 2), {}, {"size", [4 6 7 2]});
+%!test validateattributes (rand (4, 6, 7, 2), {}, {"size", [4 NaN 7 2]});
+%!test validateattributes (rand (4, 6, 7, 2), {}, {"size", [4 6 NaN 2 NaN]});
+%!test validateattributes (rand (6, 2), {}, {"numel", 12});
+%!test validateattributes (rand (6, 2), {}, {"ncols", 2});
+%!test validateattributes (rand (6, 2), {}, {"nrows", 6});
+%!test validateattributes (rand (6, 2, 4, 5), {}, {"ndims", 4});
+%!test validateattributes ([4 5 6 7], {}, {">", 3});
+%!test validateattributes ([4 5 6 7], {}, {">=", 4});
+%!test validateattributes ([4 5 6 7], {}, {"<", 8});
+%!test validateattributes ([4 5 6 7], {}, {"<=", 7});
+%!test validateattributes (eye (3), {}, {"diag"});
+%!test validateattributes ([1 0 0; 0 1 0; 0 0 1], {}, {"diag"});
+%!test validateattributes (zeros (3), {}, {"diag"});
+%!test validateattributes ([0 1 0 1], {"double", "uint8"}, {"binary", "size", [NaN 4], "nonnan"});
 
 %!test
 %! try validateattributes (ones(1,2,3), {"numeric"}, {"2d"});
